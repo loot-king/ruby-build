@@ -3,6 +3,7 @@
 load test_helper
 
 @test "installs ruby-build into PREFIX" {
+  mkdir -p "$TMP"
   cd "$TMP"
   PREFIX="${PWD}/usr" run "${BATS_TEST_DIRNAME}/../install.sh"
   assert_success ""
@@ -15,9 +16,12 @@ load test_helper
 
   assert [ -e share/ruby-build/1.8.6-p383 ]
   assert [ -e share/ruby-build/ree-1.8.7-2012.02 ]
+  assert [ -e share/man/man1/ruby-build.1 ]
+  assert [ ! -e share/man/man1/ruby-build.1.adoc ]
 }
 
 @test "build definitions don't have the executable bit" {
+  mkdir -p "$TMP"
   cd "$TMP"
   PREFIX="${PWD}/usr" run "${BATS_TEST_DIRNAME}/../install.sh"
   assert_success ""
@@ -30,6 +34,7 @@ OUT
 }
 
 @test "overwrites old installation" {
+  mkdir -p "$TMP"
   cd "$TMP"
   mkdir -p bin share/ruby-build
   touch bin/ruby-build
@@ -44,6 +49,7 @@ OUT
 }
 
 @test "unrelated files are untouched" {
+  mkdir -p "$TMP"
   cd "$TMP"
   mkdir -p bin share/bananas
   chmod g-w bin

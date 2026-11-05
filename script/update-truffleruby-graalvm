@@ -14,12 +14,12 @@ file="share/ruby-build/truffleruby+graalvm-${version}"
 
 add_platform() {
   platform="$1"
-  basename="graalvm-ce-java11-${platform}-${version}.tar.gz"
-  url="https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${version}/${basename}"
+  basename="truffleruby-jvm-${version}-${platform}.tar.gz"
+  url="https://github.com/truffleruby/truffleruby/releases/download/graal-${version}/${basename}"
   sha256=$(sha256sum "$release_directory/$basename" | cut -d ' ' -f 1)
 
   cat >> "$file" <<EOS
-  install_package "truffleruby+graalvm-${version}" "${url}#${sha256}" truffleruby_graalvm
+  install_package "truffleruby+graalvm-${version}" "${url}#${sha256}" truffleruby
   ;;
 EOS
 }
@@ -35,10 +35,9 @@ Linux-aarch64)
 EOS
 add_platform "linux-aarch64"
 cat >> "$file" <<EOS
-Darwin-x86_64)
-  use_homebrew_openssl
+Darwin-arm64)
 EOS
-add_platform "darwin-amd64"
+add_platform "macos-aarch64"
 cat >> "$file" <<EOS
 *)
   colorize 1 "Unsupported platform: \$platform"

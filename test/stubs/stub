@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-status=0
+status=127
 program="${0##*/}"
 PROGRAM="$(echo "$program" | tr a-z- A-Z_)"
 [ -n "$TMPDIR" ] || TMPDIR="/tmp"
@@ -9,12 +9,13 @@ PROGRAM="$(echo "$program" | tr a-z- A-Z_)"
 _STUB_PLAN="${PROGRAM}_STUB_PLAN"
 _STUB_RUN="${PROGRAM}_STUB_RUN"
 _STUB_INDEX="${PROGRAM}_STUB_INDEX"
+_STUB_NOINDEX="${PROGRAM}_STUB_NOINDEX"
 _STUB_RESULT="${PROGRAM}_STUB_RESULT"
 _STUB_END="${PROGRAM}_STUB_END"
 _STUB_DEBUG="${PROGRAM}_STUB_DEBUG"
 
-if [ -n "${!_STUB_DEBUG}" ]; then
-  echo "$program" "$@" >&${!_STUB_DEBUG}
+if [ -n "${!_STUB_DEBUG}" ] && [ -z "${!_STUB_END}" ]; then
+  echo stub: "$program" "$@" >&${!_STUB_DEBUG}
 fi
 
 [ -e "${!_STUB_PLAN}" ] || exit 1
@@ -24,15 +25,33 @@ fi
 # Initialize or load the stub run information.
 eval "${_STUB_INDEX}"=1
 eval "${_STUB_RESULT}"=0
+# shellcheck disable=SC1090
 [ ! -e "${!_STUB_RUN}" ] || source "${!_STUB_RUN}"
 
+# Expose this for stub scripts.
+# shellcheck disable=SC2317
+inspect_args() {
+  local arg
+  local sep=''
+  for arg; do
+    if [[ $arg == *' '* ]]; then
+      printf '%s"%s"' "$sep" "${arg//\"/\\\"}"
+    elif [[ $arg == *'"'* ]]; then
+      printf "%s'%s'" "$sep" "$arg"
+    else
+      printf '%s%s' "$sep" "$arg"
+    fi
+    sep=" "
+  done
+}
 
 # Loop over each line in the plan.
+IFS=$'\n' read -d '' -r -a lines < "${!_STUB_PLAN}" || true
 index=0
-while IFS= read -r line; do
+for line in "${lines[@]}"; do
   index=$(($index + 1))
 
-  if [ -z "${!_STUB_END}" ] && [ $index -eq "${!_STUB_INDEX}" ]; then
+  if [[ -z "${!_STUB_END}" && -n "${!_STUB_NOINDEX}" || $index -eq "${!_STUB_INDEX}" ]]; then
     # We found the plan line we're interested in.
     # Start off by assuming success.
     result=0
@@ -72,20 +91,23 @@ while IFS= read -r line; do
       ( eval "$command" )
       status="$?"
       set -e
-    else
+      [ -z "${!_STUB_NOINDEX}" ] || break
+    elif [ -z "${!_STUB_NOINDEX}" ]; then
       eval "${_STUB_RESULT}"=1
     fi
   fi
-done < "${!_STUB_PLAN}"
+done
 
 
 if [ -n "${!_STUB_END}" ]; then
   # Clean up the run file.
   rm -f "${!_STUB_RUN}"
 
+  stub_index_value="${!_STUB_INDEX}"
   # If the number of lines in the plan is larger than
   # the requested index, we failed.
-  if [ $index -ge "${!_STUB_INDEX}" ]; then
+  if [ "$index" -ge "$stub_index_value" ]; then
+    echo "$program: expected $index invocations, got $((stub_index_value-1))" >&2
     eval "${_STUB_RESULT}"=1
   fi
 
@@ -95,7 +117,7 @@ if [ -n "${!_STUB_END}" ]; then
 else
   # If the requested index is larger than the number
   # of lines in the plan file, we failed.
-  if [ "${!_STUB_INDEX}" -gt $index ]; then
+  if [[ -z "${!_STUB_NOINDEX}" && "${!_STUB_INDEX}" -gt $index ]]; then
     eval "${_STUB_RESULT}"=1
   fi
 

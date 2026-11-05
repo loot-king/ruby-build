@@ -1,6 +1,7 @@
-export TMP="$BATS_TEST_DIRNAME/tmp"
+export TMP="$BATS_TMPDIR"/ruby-build-test
 export RUBY_BUILD_CURL_OPTS=
 export RUBY_BUILD_HTTP_CLIENT="curl"
+unset JAVA_HOME
 
 if [ "$FIXTURE_ROOT" != "$BATS_TEST_DIRNAME/fixtures" ]; then
   export FIXTURE_ROOT="$BATS_TEST_DIRNAME/fixtures"
@@ -30,11 +31,12 @@ remove_commands_from_path() {
 }
 
 teardown() {
-  rm -fr "${TMP:?}"/*
+  rm -fr "${TMP:?}"
 }
 
 stub() {
   local program="$1"
+  # shellcheck disable=SC2155
   local prefix="$(echo "$program" | tr a-z- A-Z_)"
   shift
 
@@ -49,15 +51,32 @@ stub() {
   for arg in "$@"; do printf "%s\n" "$arg" >> "${TMP}/${program}-stub-plan"; done
 }
 
+stub_repeated() {
+  local program="$1"
+  # shellcheck disable=SC2155
+  local prefix="$(echo "$program" | tr a-z- A-Z_)"
+  export "${prefix}_STUB_NOINDEX"=1
+  stub "$@"
+}
+
 unstub() {
   local program="$1"
+  # shellcheck disable=SC2155
   local prefix="$(echo "$program" | tr a-z- A-Z_)"
   local path="${TMP}/bin/${program}"
 
   export "${prefix}_STUB_END"=1
 
+  local stub_was_invoked=
+  [ -e "${TMP}/${program}-stub-run" ] && stub_was_invoked=1
+
   local STATUS=0
   "$path" || STATUS="$?"
+
+  local debug_var="${prefix}_STUB_DEBUG"
+  if [ $STATUS -ne 0 ] && [ -z "${!debug_var}" ] && [ -n "$stub_was_invoked" ]; then
+    echo "unstub $program: re-run test with ${debug_var}=3 to log \`$program' invocations" >&2
+  fi
 
   rm -f "$path"
   rm -f "${TMP}/${program}-stub-plan" "${TMP}/${program}-stub-run"

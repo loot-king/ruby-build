@@ -1,2 +1,0 @@
-install_package "openssl-3.0.2" "https://www.openssl.org/source/openssl-3.0.2.tar.gz#98e91ccead4d4756ae3c9cde5e09191a8e586d9f4d50838e7ec09d6411dfdb63" mac_openssl --if has_broken_mac_openssl
-install_git "ruby-master" "https://github.com/ruby/ruby.git" "master" ldflags_dirs autoconf standard_build standard_install_with_bundled_gems verify_openssl

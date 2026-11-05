@@ -3,21 +3,56 @@
 set -e
 set -o pipefail
 
-if [ $# -ne 2 ]; then
-  echo "usage: $0 VERSION RELEASE_DIRECTORY"
+if [ $# -ne 3 ]; then
+  echo "usage: $0 VERSION OPENSSL_VERSION RELEASE_DIRECTORY"
   exit 1
 fi
 
 version="$1"
-release_directory="$2"
+openssl_version="$2"
+release_directory="$3"
 file="share/ruby-build/${version}"
 
 basename="ruby-${version}.tar.gz"
+openssl_basename="openssl-${openssl_version}.tar.gz"
 major_minor_version=$(echo ${version} | cut -d '.' -f 1,2)
 url="https://cache.ruby-lang.org/pub/ruby/${major_minor_version}/${basename}"
-sha256=$(sha256sum "$release_directory/$basename" | cut -d ' ' -f 1)
+if command -v sha256sum >/dev/null; then
+  sha256=$(sha256sum "$release_directory/$basename" | cut -d ' ' -f 1)
+elif command -v shasum >/dev/null; then
+  sha256=$(shasum -a 256 "$release_directory/$basename" | cut -d ' ' -f 1)
+else
+  echo "$0 requires sha256sum or shasum to be installed on the system."
+  exit 1
+fi
+
+openssl_url="https://github.com/openssl/openssl/releases/download/openssl-${openssl_version}/openssl-${openssl_version}.tar.gz"
+if command -v sha256sum >/dev/null; then
+  openssl_sha256=$(sha256sum "$release_directory/$openssl_basename" | cut -d ' ' -f 1)
+elif command -v shasum >/dev/null; then
+  openssl_sha256=$(shasum -a 256 "$release_directory/$openssl_basename" | cut -d ' ' -f 1)
+else
+  echo "$0 requires sha256sum or shasum to be installed on the system."
+  exit 1
+fi
+
+IFS=.- read -r major_version minor_version patch_version _prerelease <<< "$version"
+openssl_upper_bound="3.x.x"
+# These releases include Ruby/OpenSSL 3.2.4, 3.3.3, and 4.0.2, respectively.
+if (( (major_version == 3 && minor_version == 3 && patch_version >= 12) ||
+      (major_version == 3 && minor_version == 4 && patch_version >= 10) ||
+      (major_version == 4 && (minor_version >= 1 || patch_version >= 6)) ||
+      major_version > 4 )); then
+  openssl_upper_bound="4.x.x"
+fi
+
+if [ "$major_version" -ge 4 ]; then
+  needs_openssl="needs_openssl:1.1.1-${openssl_upper_bound}"
+else
+  needs_openssl="needs_openssl:1.0.2-${openssl_upper_bound}"
+fi
 
 cat > "$file" <<EOS
-install_package "openssl-1.1.1l" "https://www.openssl.org/source/openssl-1.1.1l.tar.gz#0b7a3e5e59c34827fe0c3a74b7ec8baef302b98fa80088d7f9153aa16fa76bd1" mac_openssl --if has_broken_mac_openssl
-install_package "ruby-${version}" "${url}#${sha256}" ldflags_dirs enable_shared standard verify_openssl
+install_package "openssl-${openssl_version}" "${openssl_url}#${openssl_sha256}" openssl --if ${needs_openssl}
+install_package "ruby-${version}" "${url}#${sha256}" enable_shared standard
 EOS
